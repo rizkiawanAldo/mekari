@@ -6,6 +6,12 @@ Built for the **Mekari AI Builder Technical Assessment**.
 
 ## 🎥 Demo
 
+<!--
+  Inline player (optional): upload demo/demo.mp4 via a GitHub issue/PR comment,
+  copy the resulting https://github.com/user-attachments/assets/… URL, and paste it
+  on its own line below. GitHub renders that host as a video player. A repo-relative
+  path or a <video> tag will NOT play — GitHub strips/ignores those.
+-->
 [![Demo preview — chat playground with the live routing inspector](./demo/demo-preview.jpg)](./demo/demo.mp4)
 
 **[▶ Watch the demo (54 s, MP4, 1.2 MB)](./demo/demo.mp4)** — recorded automatically
