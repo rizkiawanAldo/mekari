@@ -4,6 +4,13 @@ An intelligent, multi-tenant LLM gateway and customer support assistant engineer
 
 Built for the **Mekari AI Builder Technical Assessment**.
 
+## 🎥 Demo
+
+**[▶ Watch the demo (54 s, MP4, 1.2 MB)](./demo/demo.mp4)** — recorded automatically
+by `npm run demo:record` (Playwright), script in [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md).
+The run is self-validating: it fails if fallback, refusal, or the 429 quota guardrail
+stop working.
+
 ### 📚 Documents
 
 | Document | What it covers |
@@ -13,6 +20,7 @@ Built for the **Mekari AI Builder Technical Assessment**.
 | [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md) | Shot-by-shot script for the 3-minute video demo |
 | [`TECHNICAL_REPORT.md`](./TECHNICAL_REPORT.md) | Routing rules, model and retrieval choices, evaluation, trade-offs, **tech stack rationale (§7)**, what was cut |
 | [`EVAL_REPORT.md`](./EVAL_REPORT.md) | Generated benchmark output (30 held-out cases, 3 configs) |
+| [`demo/demo.mp4`](./demo/demo.mp4) | Recorded 54-second walkthrough of the live UI |
 
 ---
 

@@ -6,7 +6,7 @@ Mekari AI Builder Technical Assessment · one-day scope.
 |---|---|
 | **Repository** | https://github.com/rizkiawanAldo/mekari |
 | **Deployed app** | `TODO: paste the Vercel URL here` |
-| **Video demo (≈3 min)** | `TODO: paste the recording link here` — script in [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md) |
+| **Video demo (54 s)** | [`demo/demo.mp4`](./demo/demo.mp4) — script in [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md) |
 | **Technical report** | [`TECHNICAL_REPORT.md`](./TECHNICAL_REPORT.md) |
 | **Evaluation report** | [`EVAL_REPORT.md`](./EVAL_REPORT.md) |
 | **Reviewer guide** | [`REVIEWER_GUIDE.md`](./REVIEWER_GUIDE.md) (claim → file → 30-second demo) |
