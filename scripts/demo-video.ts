@@ -1,0 +1,80 @@
+import { test, expect } from "@playwright/test";
+
+/**
+ * Automated video demo — the recording of DEMO_SCRIPT.md, driven by the real UI.
+ *
+ *   npm run demo:record                                   # against localhost:3000
+ *   set DEMO_URL=https://your-app.vercel.app && npm run demo:record
+ *
+ * Every interaction is annotated in the video (element outline + action title),
+ * so the raw .webm is reviewable without editing.
+ * Output: demo/raw/<test title>/video.webm
+ *
+ * The run is self-validating: each step asserts the state a reviewer is meant
+ * to see (fallback actually fired, refusal actually happened, 429 actually
+ * returned). If the app regresses, the recording fails instead of producing a
+ * video that quietly shows the wrong thing.
+ */
+
+const LIVE_KEY = "mekari_live_key_001";
+const EXHAUSTED_KEY = "mekari_exhausted_key_003";
+
+/** Hold the frame so the viewer can read the panel before the next action. */
+const hold = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("mini inference router demo", async ({ page }) => {
+    // ---------------------------------------------------------------- 0. boot
+    await page.goto("/");
+
+    const tenantSelect = page.locator("header select").first();
+    // Tenants come from the database — this also proves the DB is reachable.
+    await expect(tenantSelect).toContainText("Mekari Customer Support", { timeout: 45_000 });
+    await tenantSelect.selectOption(LIVE_KEY);
+    await hold(1_200);
+
+    // ------------------------------------------- 1. streaming + full telemetry
+    await page.getByRole("button", { name: "Order Cancellation" }).click();
+    await expect(page.getByText("Model Backend:")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Outcome:")).toBeVisible();
+    await expect(page.getByText("Telemetry & Metering")).toBeVisible();
+    await hold(3_500);
+
+    // ------------------------------------------------ 2. fallback is recorded
+    const outageToggle = page.getByRole("button", { name: /Simulate Primary Outage/ });
+    await outageToggle.click();
+    await expect(outageToggle).toContainText("ON");
+
+    await page.getByPlaceholder(/Ask customer support/).fill("Where is my order #5541?");
+    await page.getByRole("button", { name: "Send" }).click();
+
+    // The Inspector only renders this block when fellBackFrom is set.
+    await expect(page.getByText("Fallback Triggered").first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("fallback_success").first()).toBeVisible();
+    await hold(4_000);
+
+    await outageToggle.click();
+    await expect(outageToggle).toContainText("OFF");
+    await hold(600);
+
+    // ------------------------------------------------- 3. refuses, not guesses
+    await page.getByRole("button", { name: "Out of Scope (Refusal test)" }).click();
+    await expect(page.getByText("refused").first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("system-guardrail").first()).toBeVisible();
+    await hold(3_500);
+
+    // ------------------------------------------------------ 4. quota fails closed
+    await tenantSelect.selectOption(EXHAUSTED_KEY);
+    await hold(800);
+    await page.getByPlaceholder(/Ask customer support/).fill("Can you cancel order #1234?");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByText(/Quota Exceeded/).first()).toBeVisible({ timeout: 45_000 });
+    await hold(3_500);
+    await tenantSelect.selectOption(LIVE_KEY);
+    await hold(600);
+
+    // --------------------------------------------------------------- 5. usage view
+    await page.getByRole("button", { name: "Usage & Quotas" }).click();
+    await expect(page.getByText("Registered Tenants & Quota Policy")).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByText("Recent Metered Request Audit Log")).toBeVisible();
+    await hold(6_000);
+});

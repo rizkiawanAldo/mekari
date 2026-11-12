@@ -38,6 +38,11 @@ dev.db*
 # vercel
 .vercel
 
+# demo recording output
+demo/raw/
+demo/*.log
+test-results/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
