@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Send,
   Bot,
@@ -8,11 +8,8 @@ import {
   ShieldCheck,
   AlertTriangle,
   Zap,
-  RotateCcw,
-  ExternalLink,
   Cpu,
   Layers,
-  Coins,
   Clock,
   Database,
   Building,
@@ -87,6 +84,8 @@ interface AuditLog {
   };
 }
 
+type BackendPreference = "auto" | "deepseek" | "groq" | "gemini" | "mock";
+
 const PRESET_QUERIES = [
   { label: "Order Cancellation", query: "I would like to cancel my order please." },
   { label: "Check Refund Policy", query: "What is your refund policy for returned items?" },
@@ -112,13 +111,13 @@ export default function Home() {
   ]);
   const [inputQuery, setInputQuery] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [preferredBackend, setPreferredBackend] = useState<"auto" | "groq" | "gemini" | "mock">("auto");
+  const [preferredBackend, setPreferredBackend] = useState<BackendPreference>("auto");
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [activeMeta, setActiveMeta] = useState<MessageMeta | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const fetchUsageData = async () => {
+  const fetchUsageData = useCallback(async () => {
     setIsLoadingUsage(true);
     try {
       const res = await fetch("/api/usage");
@@ -126,8 +125,8 @@ export default function Home() {
         const data = await res.json();
         setTenants(data.tenants || []);
         setRecentLogs(data.recentRequests || []);
-        if (data.tenants && data.tenants.length > 0 && !selectedTenantKey) {
-          setSelectedTenantKey(data.tenants[0].apiKey);
+        if (data.tenants && data.tenants.length > 0) {
+          setSelectedTenantKey((prev) => prev || data.tenants[0].apiKey);
         }
       }
     } catch (err) {
@@ -135,11 +134,11 @@ export default function Home() {
     } finally {
       setIsLoadingUsage(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUsageData();
-  }, []);
+  }, [fetchUsageData]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -185,16 +184,16 @@ export default function Home() {
           prev.map((m) =>
             m.id === botMsgId
               ? {
-                  ...m,
-                  content: `⚠️ [Gateway Error] ${errMsg}`,
-                  meta: {
-                    model: "gateway-error",
-                    latencyMs: 5,
-                    costUsd: 0,
-                    tokens: { prompt: 0, completion: 0, total: 0 },
-                    outcome: res.status === 429 ? "quota_exceeded" : "error",
-                  },
-                }
+                ...m,
+                content: `⚠️ [Gateway Error] ${errMsg}`,
+                meta: {
+                  model: "gateway-error",
+                  latencyMs: 5,
+                  costUsd: 0,
+                  tokens: { prompt: 0, completion: 0, total: 0 },
+                  outcome: res.status === 429 ? "quota_exceeded" : "error",
+                },
+              }
               : m
           )
         );
@@ -332,11 +331,10 @@ export default function Home() {
           {/* Fallback Simulator Toggle */}
           <button
             onClick={() => setSimulateFailure((prev) => !prev)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-              simulateFailure
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${simulateFailure
                 ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                 : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
-            }`}
+              }`}
             title="Forces Primary Backend (Groq/Llama) to fail, proving the Secondary Fallback circuit in real time"
           >
             <AlertTriangle className={`w-3.5 h-3.5 ${simulateFailure ? "text-amber-400" : ""}`} />
@@ -347,9 +345,8 @@ export default function Home() {
           <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
             <button
               onClick={() => setActiveTab("chat")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${
-                activeTab === "chat" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${activeTab === "chat" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
               Playground
@@ -359,9 +356,8 @@ export default function Home() {
                 setActiveTab("usage");
                 fetchUsageData();
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${
-                activeTab === "usage" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${activeTab === "usage" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
               Usage & Quotas
@@ -395,10 +391,11 @@ export default function Home() {
                 <span className="text-slate-400">Backend Preference:</span>
                 <select
                   value={preferredBackend}
-                  onChange={(e) => setPreferredBackend(e.target.value as any)}
+                  onChange={(e) => setPreferredBackend(e.target.value as BackendPreference)}
                   className="bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-slate-300 text-xs focus:outline-none"
                 >
                   <option value="auto">Auto Router (Primary + Fallback)</option>
+                  <option value="deepseek">Force DeepSeek (deepseek-chat)</option>
                   <option value="groq">Force Groq (Llama 3.1)</option>
                   <option value="gemini">Force Gemini (1.5 Flash)</option>
                   <option value="mock">Force Mock Backend</option>
@@ -414,22 +411,20 @@ export default function Home() {
                   className={`flex gap-3 max-w-3xl ${m.role === "user" ? "ml-auto flex-row-reverse" : ""}`}
                 >
                   <div
-                    className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${
-                      m.role === "user"
+                    className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${m.role === "user"
                         ? "bg-slate-700 text-slate-200"
                         : "bg-indigo-600/90 text-white shadow-sm"
-                    }`}
+                      }`}
                   >
                     {m.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                   </div>
 
                   <div className={`space-y-1.5 ${m.role === "user" ? "items-end text-right" : ""}`}>
                     <div
-                      className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
-                        m.role === "user"
+                      className={`p-3.5 rounded-2xl text-sm leading-relaxed ${m.role === "user"
                           ? "bg-indigo-600 text-white rounded-br-none"
                           : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none shadow-sm"
-                      }`}
+                        }`}
                     >
                       {m.content ? (
                         <p className="whitespace-pre-wrap">{m.content}</p>
@@ -538,15 +533,14 @@ export default function Home() {
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 font-medium">Outcome:</span>
                     <span
-                      className={`font-semibold px-2 py-0.5 rounded ${
-                        activeMeta.outcome === "fallback_success"
+                      className={`font-semibold px-2 py-0.5 rounded ${activeMeta.outcome === "fallback_success"
                           ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                           : activeMeta.outcome === "refused"
-                          ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                          : activeMeta.outcome === "quota_exceeded"
-                          ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                          : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      }`}
+                            ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                            : activeMeta.outcome === "quota_exceeded"
+                              ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        }`}
                     >
                       {activeMeta.outcome}
                     </span>
@@ -617,9 +611,8 @@ export default function Home() {
                     </div>
                     {activeMeta.confidence !== undefined && (
                       <span
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          activeMeta.confidence >= 0.5 ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-                        }`}
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activeMeta.confidence >= 0.5 ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
+                          }`}
                       >
                         {(activeMeta.confidence * 100).toFixed(0)}% Confidence
                       </span>
@@ -639,9 +632,8 @@ export default function Home() {
                     <div className="space-y-1">
                       <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            activeMeta.confidence >= 0.5 ? "bg-emerald-400" : "bg-red-400"
-                          }`}
+                          className={`h-full rounded-full transition-all duration-500 ${activeMeta.confidence >= 0.5 ? "bg-emerald-400" : "bg-red-400"
+                            }`}
                           style={{ width: `${Math.min(100, Math.max(5, activeMeta.confidence * 100))}%` }}
                         />
                       </div>
@@ -793,9 +785,8 @@ export default function Home() {
                             </div>
                             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${
-                                  isExhausted ? "bg-red-500" : usagePercent > 80 ? "bg-amber-400" : "bg-indigo-500"
-                                }`}
+                                className={`h-full rounded-full ${isExhausted ? "bg-red-500" : usagePercent > 80 ? "bg-amber-400" : "bg-indigo-500"
+                                  }`}
                                 style={{ width: `${usagePercent}%` }}
                               />
                             </div>
@@ -890,15 +881,14 @@ export default function Home() {
                       <td className="px-5 py-3 font-mono text-emerald-400">${log.costUsd.toFixed(6)}</td>
                       <td className="px-5 py-3">
                         <span
-                          className={`font-semibold px-2 py-0.5 rounded text-[10px] ${
-                            log.outcome === "fallback_success"
+                          className={`font-semibold px-2 py-0.5 rounded text-[10px] ${log.outcome === "fallback_success"
                               ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                               : log.outcome === "quota_exceeded"
-                              ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                              : log.outcome === "refused"
-                              ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          }`}
+                                ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                                : log.outcome === "refused"
+                                  ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                  : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            }`}
                         >
                           {log.outcome}
                         </span>

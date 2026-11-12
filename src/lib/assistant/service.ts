@@ -3,7 +3,7 @@ import { routeRequest, RoutingOptions } from "../router";
 
 export interface SupportAssistantInput {
   query: string;
-  preferredBackend?: "auto" | "groq" | "gemini" | "mock";
+  preferredBackend?: "auto" | "deepseek" | "groq" | "gemini" | "mock";
   simulatePrimaryFailure?: boolean;
 }
 
@@ -137,3 +137,4 @@ Instructions:
     outcome,
   };
 }
+

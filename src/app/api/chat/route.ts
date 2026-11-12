@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateAndCheckQuota } from "@/lib/gateway/auth";
+import { authenticateAndCheckQuota, consumeQuota } from "@/lib/gateway/auth";
 import { recordMeteredRequest } from "@/lib/gateway/metering";
 import { processSupportAssistant } from "@/lib/assistant/service";
 
@@ -18,9 +18,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { tenant } = authResult;
-
-    // 2. Parse request payload
+    // 2. Parse & validate request payload BEFORE consuming quota,
+    // so malformed requests (HTTP 400) do not burn a quota unit.
     const body = await req.json().catch(() => ({}));
     const query = body.query || body.message;
     const stream = body.stream !== false; // default true
@@ -34,7 +33,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Process through Support Assistant (RAG + Router + Refusal Guardrail)
+    // 3. Consume one quota unit now that the request is valid.
+    const tenant = await consumeQuota(authResult.tenant.id);
+
+    // 4. Process through Support Assistant (RAG + Router + Refusal Guardrail)
     const result = await processSupportAssistant({
       query,
       preferredBackend,

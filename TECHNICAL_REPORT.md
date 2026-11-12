@@ -34,9 +34,9 @@ Rather than introducing premature complexity (e.g. distributed vector databases,
 | **Chaos / Mock Engine** | **Configurable Mock Engine** | Configurable (50ms - 5000ms) | Normalized to match target tiers | Enables deterministic testing of timeout conditions, 500/503 HTTP errors, and reproducible offline benchmark runs. |
 
 ### 2.2 Fallback Circuit & Observable Telemetry
-The router enforces an active timeout of **3,000ms** on the primary backend.
+The router enforces an active timeout of **3,500ms** on the primary backend.
 If the primary backend:
-- Exceeds the 3,000ms timeout window, OR
+- Exceeds the 3,500ms timeout window, OR
 - Throws an HTTP 5xx / rate-limit / network error, OR
 - Is simulated via the UI "Simulate Outage" chaos toggle,
 
@@ -99,3 +99,4 @@ In accordance with good engineering judgment:
    *Accepted Trade-Off*: Used explicit, auditable price rates ($/1M tokens) in `src/lib/cost.ts`, ensuring deterministic and inspectable financial accounting.
 3. **Database-Enforced Atomic Quotas vs Redis Token Buckets**:
    *Accepted Trade-Off*: Atomic DB check-and-update guarantees fail-closed behavior across serverless instances without introducing Redis cluster maintenance.
+

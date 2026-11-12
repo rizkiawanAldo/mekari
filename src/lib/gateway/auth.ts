@@ -68,14 +68,21 @@ export async function authenticateAndCheckQuota(apiKeyHeader: string | null): Pr
     };
   }
 
-  // Atomically increment consumed request
-  const updatedTenant = await prisma.tenant.update({
-    where: { id: tenant.id },
-    data: { usedRequests: { increment: 1 } },
-  });
-
   return {
     authorized: true,
-    tenant: updatedTenant,
+    tenant,
   };
 }
+
+/**
+ * Atomically increments the tenant's consumed request counter.
+ * Call this only after the request has passed validation, so malformed
+ * requests (HTTP 400) do not silently consume quota.
+ */
+export async function consumeQuota(tenantId: string): Promise<Tenant> {
+  return prisma.tenant.update({
+    where: { id: tenantId },
+    data: { usedRequests: { increment: 1 } },
+  });
+}
+
