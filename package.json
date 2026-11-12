@@ -10,6 +10,8 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@libsql/client": "^0.8.0",
+    "@prisma/adapter-libsql": "^6.4.1",
     "@prisma/client": "^6.4.1",
     "lucide-react": "^1.72.0",
     "minisearch": "^7.2.0",

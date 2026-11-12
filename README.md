@@ -37,6 +37,39 @@ Open [http://localhost:3000](http://localhost:3000) to access the **Chat Playgro
 
 ---
 
+## ☁️ Deploying to Vercel (Turso / libSQL)
+
+Vercel's filesystem is read-only, so the SQLite file used locally cannot be used in production. Deploy against a hosted [Turso](https://turso.tech) database instead — the app automatically switches to the libSQL driver adapter when `TURSO_DATABASE_URL` is set (see `src/lib/prisma.ts`), and keeps using the local file otherwise.
+
+```bash
+# 1. Create the hosted database
+turso db create mekari-router
+
+# 2. Grab the URL and an auth token
+turso db show mekari-router --url
+turso db tokens create mekari-router
+
+# 3. Create the schema (Prisma Migrate does not target Turso directly)
+turso db shell mekari-router < prisma/migrations/20261112000000_init/migration.sql
+
+# 4. Seed the four demo tenants into Turso
+set TURSO_DATABASE_URL=libsql://<db>-<org>.turso.io
+set TURSO_AUTH_TOKEN=<token>
+npx tsx scripts/seed.ts
+```
+
+Then import the GitHub repo at [vercel.com/new](https://vercel.com/new) and set these environment variables before deploying:
+
+| Variable | Purpose |
+|---|---|
+| `TURSO_DATABASE_URL` | `libsql://…` URL from step 2 |
+| `TURSO_AUTH_TOKEN` | Token from step 2 |
+| `GROQ_API_KEY` / `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` | Optional; without keys the mock engine serves responses |
+
+`prisma generate` runs automatically during the Vercel build via the `postinstall` script.
+
+---
+
 ## 🔑 Pre-Seeded Tenant API Keys
 
 The SQLite database comes pre-seeded with 4 test tenants:

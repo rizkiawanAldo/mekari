@@ -1,10 +1,13 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // Local development SQLite file. In production (Vercel) the client is
+  // constructed with the Turso/libSQL driver adapter instead — see src/lib/prisma.ts.
+  url      = "file:./dev.db"
 }
 
 model Tenant {
