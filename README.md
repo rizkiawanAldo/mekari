@@ -6,18 +6,15 @@ Built for the **Mekari AI Builder Technical Assessment**.
 
 ## 🎥 Demo
 
-<!--
-  Inline player (optional): upload demo/demo.mp4 via a GitHub issue/PR comment,
-  copy the resulting https://github.com/user-attachments/assets/… URL, and paste it
-  on its own line below. GitHub renders that host as a video player. A repo-relative
-  path or a <video> tag will NOT play — GitHub strips/ignores those.
--->
-[![Demo preview — chat playground with the live routing inspector](./demo/demo-preview.jpg)](./demo/demo.mp4)
+![Demo — streaming answer, fallback trigger, refusal guardrail, and quota enforcement](./demo/demo-preview.gif)
 
-**[▶ Watch the demo (54 s, MP4, 1.2 MB)](./demo/demo.mp4)** — recorded automatically
-by `npm run demo:record` (Playwright), script in [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md).
-The run is self-validating: it fails if fallback, refusal, or the 429 quota guardrail
-stop working.
+*Auto-playing preview of the real UI (54 s, 640 px). Prefer the [full-quality MP4 (1.2 MB)](./demo/demo.mp4). Recorded by `npm run demo:record` (Playwright) from [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md); the run is self-validating — it fails if fallback, refusal, or the 429 quota guardrail stop working.*
+
+<!--
+  True inline player (optional): upload demo/demo.mp4 via a GitHub issue/PR comment
+  and paste the resulting https://github.com/user-attachments/assets/… URL on its own
+  line. GitHub renders that host as a video player; a repo path or <video> tag will not.
+-->
 
 ### 📚 Documents
 
@@ -28,7 +25,7 @@ stop working.
 | [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md) | Shot-by-shot script for the 3-minute video demo |
 | [`TECHNICAL_REPORT.md`](./TECHNICAL_REPORT.md) | Routing rules, model and retrieval choices, evaluation, trade-offs, **tech stack rationale (§7)**, what was cut |
 | [`EVAL_REPORT.md`](./EVAL_REPORT.md) | Generated benchmark output (30 held-out cases, 3 configs) |
-| [`demo/demo.mp4`](./demo/demo.mp4) | Recorded 54-second walkthrough of the live UI |
+| [`demo/demo.mp4`](./demo/demo.mp4) | Recorded 54-second walkthrough of the live UI (GIF preview in the README) |
 
 ---
 
