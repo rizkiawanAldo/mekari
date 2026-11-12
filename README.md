@@ -11,7 +11,7 @@ Built for the **Mekari AI Builder Technical Assessment**.
 | [`SUBMISSION.md`](./SUBMISSION.md) | Deliverable index: repo, deployed URL, video, what was built |
 | [`REVIEWER_GUIDE.md`](./REVIEWER_GUIDE.md) | Rubric claim → source file → 30-second demo |
 | [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md) | Shot-by-shot script for the 3-minute video demo |
-| [`TECHNICAL_REPORT.md`](./TECHNICAL_REPORT.md) | Routing rules, model and retrieval choices, evaluation, trade-offs, what was cut |
+| [`TECHNICAL_REPORT.md`](./TECHNICAL_REPORT.md) | Routing rules, model and retrieval choices, evaluation, trade-offs, **tech stack rationale (§7)**, what was cut |
 | [`EVAL_REPORT.md`](./EVAL_REPORT.md) | Generated benchmark output (30 held-out cases, 3 configs) |
 
 ---
