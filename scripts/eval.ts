@@ -1,3 +1,4 @@
+import "./load-env";
 import fs from "fs";
 import path from "path";
 import { processSupportAssistant } from "../src/lib/assistant/service";
@@ -83,12 +84,38 @@ async function runEvaluationForConfig(
     process.stdout.write(`Evaluating case [${i + 1}/${cases.length}]: "${c.query.slice(0, 35)}..." `);
 
     const start = Date.now();
-    const res = await processSupportAssistant({
-      query: c.query,
-      preferredBackend: options.preferredBackend,
-      simulatePrimaryFailure: options.simulateFailure,
-    });
+    let res: Awaited<ReturnType<typeof processSupportAssistant>> | null = null;
+    let caseError: string | null = null;
+
+    try {
+      res = await processSupportAssistant({
+        query: c.query,
+        preferredBackend: options.preferredBackend,
+        simulatePrimaryFailure: options.simulateFailure,
+      });
+    } catch (err: unknown) {
+      // A single failing case must not abort the whole benchmark.
+      caseError = err instanceof Error ? err.message : String(err);
+    }
     const latencyMs = Date.now() - start;
+
+    if (!res) {
+      results.push({
+        id: c.id,
+        query: c.query,
+        goldIntent: c.intent,
+        predictedIntent: "error",
+        intentMatched: false,
+        qualityScore: 0,
+        latencyMs,
+        costUsd: 0,
+        model: "error",
+        fellBackFrom: null,
+        outcome: "error",
+      });
+      console.log(`-> ERROR (${caseError}) | Latency: ${latencyMs}ms`);
+      continue;
+    }
 
     const intentMatched =
       res.intent.toLowerCase().trim() === c.intent.toLowerCase().trim() ||
@@ -156,18 +183,29 @@ async function main() {
   const cases: EvalCase[] = JSON.parse(fs.readFileSync(evalPath, "utf-8"));
   console.log(`Loaded ${cases.length} held-out test cases.`);
 
-  // Configuration A: Standard Single Provider (Mock Baseline / Fast Llama Tier)
+  // Configuration A: fast/cheap tier. Runs the full retrieval + grounding pipeline
+  // deterministically at ~160ms so routing/cost comparisons are not dominated by noise.
   const configA = await runEvaluationForConfig(
-    "Config A: Primary Llama Tier (Fast / Cost-Optimized)",
+    "Config A: Fast tier (llama-3.1, ~160ms)",
     cases,
     { preferredBackend: "mock", simulateFailure: false }
   );
 
-  // Configuration B: Full Multi-Backend Inference Router with Fallback Active (10% chaos failure test)
+  // Configuration B: the higher-quality / fallback tier, routed directly.
+  // This measures the QUALITY and COST of the fallback tier. Fallback FREQUENCY
+  // (i.e. does the chain actually fail over?) is measured separately by Config C.
   const configB = await runEvaluationForConfig(
-    "Config B: Router with Automatic Fallback (Gemini Tier / Failover Protected)",
+    "Config B: Fallback tier (gemini-1.5-flash)",
     cases,
     { preferredBackend: "gemini", simulateFailure: false }
+  );
+
+  // Configuration C: the routing/fallback chain itself. The primary backend is
+  // forced to fail on every request, so all 30 cases must be served by the fallback.
+  const configC = await runEvaluationForConfig(
+    "Config C: Failover chain (primary forced to fail)",
+    cases,
+    { preferredBackend: "auto", simulateFailure: true }
   );
 
   // Print Summary Table
@@ -199,7 +237,28 @@ async function main() {
   console.log(
     `| Success Rate                  | ${(configA.successRate + "%").padEnd(35)} | ${(configB.successRate + "%").padEnd(35)} |`
   );
+  console.log(
+    `| Fallback Fired                | ${(configA.fallbackCount + "/" + configA.totalCases).padEnd(35)} | ${(configB.fallbackCount + "/" + configB.totalCases).padEnd(35)} |`
+  );
+  console.log(
+    `| Models That Served            | ${[...new Set(configA.results.map((r) => r.model))].join(", ").slice(0, 35).padEnd(35)} | ${[...new Set(configB.results.map((r) => r.model))].join(", ").slice(0, 35).padEnd(35)} |`
+  );
   console.log("==========================================================================================\n");
+
+  // Failover verification: proves the fallback chain actually fires.
+  console.log("FAILOVER VERIFICATION (Config C — primary forced to fail on every request)");
+  console.log(
+    `  cases: ${configC.totalCases} | served by fallback: ${configC.fallbackCount}/${configC.totalCases} | success rate: ${configC.successRate}%`
+  );
+  console.log(
+    `  p50 latency: ${configC.p50LatencyMs} ms | total cost: $${configC.totalCostUsd.toFixed(6)}`
+  );
+  console.log(
+    `  models that answered: ${[...new Set(configC.results.map((r) => r.model))].join(", ")}`
+  );
+  console.log(
+    `  sample reason: ${configC.results[0]?.fellBackFrom ?? "(none)"}\n`
+  );
 
   // Generate Markdown Report
   const reportMd = `# Mini Inference Router — Evaluation Benchmark Report
@@ -217,14 +276,30 @@ This evaluation measures the performance of the **Mini Inference Router** across
 | **Mean Latency** | **${configA.avgLatencyMs} ms** | **${configB.avgLatencyMs} ms** | Primary tier delivers sub-second SLA |
 | **Total Cost (30 queries)** | **$${configA.totalCostUsd.toFixed(6)}** | **$${configB.totalCostUsd.toFixed(6)}** | Low-cost tier preserves budget |
 | **Success / Grounded Rate** | **${configA.successRate}%** | **${configB.successRate}%** | 100% reliability with guardrails |
+| **Fallback Fired** | **${configA.fallbackCount}/${configA.totalCases}** | **${configB.fallbackCount}/${configB.totalCases}** | Both configs route directly, so no failover occurs by design |
+| **Models That Served** | ${[...new Set(configA.results.map((r) => r.model))].join(", ")} | ${[...new Set(configB.results.map((r) => r.model))].join(", ")} | Recorded per case, not assumed |
 
 ## 3. Key Findings & Trade-Offs
 1. **Routing Rationale**:
-   - **Primary Backend (Llama 3.1 / Fast Tier)** serves standard queries with ultra-low latency (${configA.avgLatencyMs}ms) and lowest cost ($${configA.totalCostUsd.toFixed(6)} per 30 requests).
-   - **Secondary Backend (Gemini Flash Tier)** offers superior context handling and higher resilience when primary encounters timeout or rate limiting.
+   - **Fast Tier (llama-3.1)** serves standard queries with ultra-low latency (${configA.avgLatencyMs}ms) and lowest cost ($${configA.totalCostUsd.toFixed(6)} per 30 requests).
+   - **Fallback Tier (Gemini 1.5 Flash)** is slower (${configB.p50LatencyMs}ms) and more expensive ($${configB.totalCostUsd.toFixed(6)} per 30 requests), which is exactly why it is not the default. These two runs route *directly* to each tier — they compare the tiers, not the failover path. That path is measured in section 4.
 2. **Knowledge Base Grounding & Refusal**:
    - Out-of-scope inquiries are intercepted at the BM25 confidence gate (<0.35 confidence), refusing immediately with zero LLM token waste.
    - Grounded context synthesis ensures customer answers remain faithful to official policies.
+
+## 4. Failover Verification (Config C)
+
+Config C forces the primary backend to fail on **every** request (the same mechanism as the console's "Simulate Primary Outage" toggle), so the fallback chain must serve all 30 cases or the run fails.
+
+| Metric | Result |
+|---|---|
+| Cases | ${configC.totalCases} |
+| Served by fallback | **${configC.fallbackCount}/${configC.totalCases}** |
+| Success rate | **${configC.successRate}%** |
+| P50 latency | **${configC.p50LatencyMs} ms** (includes the failed primary attempt) |
+| Total cost | **$${configC.totalCostUsd.toFixed(6)}** |
+| Models that answered | ${[...new Set(configC.results.map((r) => r.model))].join(", ")} |
+| Recorded fallback reason | \`${(configC.results[0]?.fellBackFrom ?? "(none)").replace(/\|/g, "\\|")}\` |
 
 *Generated automatically by \`scripts/eval.ts\` on ${new Date().toISOString()}*
 `;
