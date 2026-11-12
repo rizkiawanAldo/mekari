@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id            String    @id @default(cuid())
+  name          String
+  apiKey        String    @unique
+  quotaRequests Int       @default(100)
+  usedRequests  Int       @default(0)
+  requests      Request[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Request {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  endpoint         String
+  model            String
+  fallbackFrom     String?
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  costUsd          Float    @default(0.0)
+  latencyMs        Int      @default(0)
+  outcome          String   // "success" | "fallback_success" | "refused" | "quota_exceeded" | "error"
+  intent           String?
+  confidence       Float?
+  retrievedDocs    String?  // JSON stringified array of retrieved documents
+  userQuery        String?
+  responseSnippet  String?
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
