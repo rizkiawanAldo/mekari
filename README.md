@@ -6,6 +6,8 @@ Built for the **Mekari AI Builder Technical Assessment**.
 
 ## 🎥 Demo
 
+[![Demo preview — chat playground with the live routing inspector](./demo/demo-preview.jpg)](./demo/demo.mp4)
+
 **[▶ Watch the demo (54 s, MP4, 1.2 MB)](./demo/demo.mp4)** — recorded automatically
 by `npm run demo:record` (Playwright), script in [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md).
 The run is self-validating: it fails if fallback, refusal, or the 429 quota guardrail
