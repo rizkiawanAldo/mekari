@@ -58,6 +58,7 @@ interface TenantStat {
   id: string;
   name: string;
   apiKey: string;
+  apiKeyMasked?: string;
   quotaRequests: number;
   usedRequests: number;
   remainingQuota: number;
@@ -96,9 +97,26 @@ const PRESET_QUERIES = [
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"chat" | "usage">("chat");
   const [tenants, setTenants] = useState<TenantStat[]>([]);
-  const [selectedTenantKey, setSelectedTenantKey] = useState<string>("mekari_live_key_001");
+  const [selectedTenantKey, setSelectedTenantKey] = useState<string>("");
   const [recentLogs, setRecentLogs] = useState<AuditLog[]>([]);
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
+
+  // Admin token for the usage/quota endpoints. Entered manually and kept in
+  // localStorage; the server only enforces it in production (see requireAdmin).
+  const [adminToken, setAdminToken] = useState<string>("");
+
+  const persistAdminToken = (value: string) => {
+    setAdminToken(value);
+    if (typeof window === "undefined") return;
+    if (value) localStorage.setItem("mekari_admin_token", value);
+    else localStorage.removeItem("mekari_admin_token");
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("mekari_admin_token");
+    if (stored) setAdminToken(stored);
+  }, []);
 
   // Playground state
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -120,21 +138,28 @@ export default function Home() {
   const fetchUsageData = useCallback(async () => {
     setIsLoadingUsage(true);
     try {
-      const res = await fetch("/api/usage");
+      const res = await fetch("/api/usage", {
+        headers: adminToken ? { "x-admin-token": adminToken } : {},
+      });
       if (res.ok) {
         const data = await res.json();
-        setTenants(data.tenants || []);
+        const list: TenantStat[] = data.tenants || [];
+        setTenants(list);
         setRecentLogs(data.recentRequests || []);
-        if (data.tenants && data.tenants.length > 0) {
-          setSelectedTenantKey((prev) => prev || data.tenants[0].apiKey);
-        }
+        setSelectedTenantKey((prev) => {
+          const keys = list.map((t) => t.apiKey);
+          return keys.includes(prev) ? prev : keys[0] || "";
+        });
+      } else {
+        setTenants([]);
+        setRecentLogs([]);
       }
     } catch (err) {
       console.error("Error loading usage:", err);
     } finally {
       setIsLoadingUsage(false);
     }
-  }, []);
+  }, [adminToken]);
 
   useEffect(() => {
     fetchUsageData();
@@ -272,7 +297,10 @@ export default function Home() {
     try {
       await fetch("/api/usage", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(adminToken ? { "x-admin-token": adminToken } : {}),
+        },
         body: JSON.stringify({ action: "reset_quota", tenantId }),
       });
       fetchUsageData();
@@ -285,7 +313,10 @@ export default function Home() {
     try {
       await fetch("/api/usage", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(adminToken ? { "x-admin-token": adminToken } : {}),
+        },
         body: JSON.stringify({ action: "topup", tenantId, amount: 50 }),
       });
       fetchUsageData();
@@ -317,6 +348,17 @@ export default function Home() {
 
         {/* Global Controls & Tenant Selector */}
         <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs">
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="password"
+              value={adminToken}
+              onChange={(e) => persistAdminToken(e.target.value)}
+              placeholder="Admin token"
+              title="Required by the Usage & Quotas endpoints (x-admin-token header) in production."
+              className="bg-transparent text-slate-200 placeholder-slate-500 w-28 focus:outline-none"
+            />
+          </div>
           <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs">
             <Building className="w-3.5 h-3.5 text-slate-400" />
             <span className="text-slate-400">Tenant:</span>
@@ -506,7 +548,7 @@ export default function Home() {
                 </button>
               </form>
               <div className="flex items-center justify-between text-[11px] text-slate-500 max-w-4xl mx-auto mt-2 px-1">
-                <span>Active Tenant: {currentTenant?.name || "None"} (API Key: {selectedTenantKey})</span>
+                <span>Active Tenant: {currentTenant?.name || "None"} (API Key: {currentTenant?.apiKeyMasked || "None"})</span>
                 <span>Remaining Quota: {currentTenant ? `${currentTenant.remainingQuota} / ${currentTenant.quotaRequests}` : "0"}</span>
               </div>
             </div>

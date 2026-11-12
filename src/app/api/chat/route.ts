@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateAndCheckQuota, consumeQuota } from "@/lib/gateway/auth";
+import crypto from "node:crypto";
+import { authenticateTenant, reserveQuota } from "@/lib/gateway/auth";
 import { recordMeteredRequest } from "@/lib/gateway/metering";
 import { processSupportAssistant } from "@/lib/assistant/service";
 
@@ -7,9 +8,10 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // 1. Auth & Quota Guardrail (Fails Closed)
+    // 1. Auth Guardrail (Fails Closed). Quota is reserved atomically below,
+    // after the payload is validated so malformed requests do not burn quota.
     const apiKey = req.headers.get("x-api-key") || req.headers.get("authorization");
-    const authResult = await authenticateAndCheckQuota(apiKey);
+    const authResult = await authenticateTenant(apiKey);
 
     if (!authResult.authorized) {
       return NextResponse.json(
@@ -33,8 +35,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Consume one quota unit now that the request is valid.
-    const tenant = await consumeQuota(authResult.tenant.id);
+    if (query.length > 4000) {
+      return NextResponse.json(
+        { error: "Bad Request: 'query' exceeds the 4000 character limit." },
+        { status: 400 }
+      );
+    }
+
+    // 3. Atomically reserve one quota unit now that the request is valid.
+    const reservation = await reserveQuota(authResult.tenant.id);
+    if (!reservation.reserved) {
+      return NextResponse.json(
+        {
+          error: `Quota Exceeded: Tenant '${authResult.tenant.name}' has exhausted its quota. Request rejected.`,
+        },
+        { status: 429 }
+      );
+    }
+    const tenant = reservation.tenant;
 
     // 4. Process through Support Assistant (RAG + Router + Refusal Guardrail)
     const result = await processSupportAssistant({
@@ -139,7 +157,7 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     console.error("Gateway unexpected error:", err);
     return NextResponse.json(
-      { error: "Internal Server Error in Inference Gateway", details: String(err) },
+      { error: "Internal Server Error in Inference Gateway", requestId: crypto.randomUUID() },
       { status: 500 }
     );
   }

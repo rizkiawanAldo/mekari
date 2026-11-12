@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/gateway/admin";
 
-export async function GET() {
+function maskApiKey(apiKey: string): string {
+  if (apiKey.length <= 8) return "••••";
+  return `${apiKey.slice(0, 8)}••••${apiKey.slice(-4)}`;
+}
+
+export async function GET(req: NextRequest) {
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const tenants = await prisma.tenant.findMany({
       include: {
@@ -26,6 +36,7 @@ export async function GET() {
         id: t.id,
         name: t.name,
         apiKey: t.apiKey,
+        apiKeyMasked: maskApiKey(t.apiKey),
         quotaRequests: t.quotaRequests,
         usedRequests: t.usedRequests,
         remainingQuota: Math.max(0, t.quotaRequests - t.usedRequests),
@@ -54,13 +65,16 @@ export async function GET() {
   } catch (err: unknown) {
     console.error("Failed to fetch usage stats:", err);
     return NextResponse.json(
-      { error: "Internal Server Error fetching usage statistics", details: String(err) },
+      { error: "Internal Server Error fetching usage statistics", requestId: crypto.randomUUID() },
       { status: 500 }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
+  const authError = requireAdmin(req);
+  if (authError) return authError;
+
   try {
     const body = await req.json();
     const { action, tenantId } = body;
@@ -75,6 +89,9 @@ export async function POST(req: NextRequest) {
 
     if (action === "topup" && tenantId) {
       const amount = Number(body.amount) || 50;
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
+        return NextResponse.json({ error: "Invalid top-up amount." }, { status: 400 });
+      }
       await prisma.tenant.update({
         where: { id: tenantId },
         data: { quotaRequests: { increment: amount } },
@@ -84,6 +101,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err: unknown) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("Failed to update usage:", err);
+    return NextResponse.json(
+      { error: "Internal Server Error updating usage", requestId: crypto.randomUUID() },
+      { status: 500 }
+    );
   }
 }

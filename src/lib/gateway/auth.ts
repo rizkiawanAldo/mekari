@@ -10,15 +10,15 @@ export interface AuthFailure {
   authorized: false;
   statusCode: number;
   error: string;
-  tenant?: Tenant;
 }
 
 export type AuthResult = AuthSuccess | AuthFailure;
 
 /**
- * Validates the tenant API key and strictly enforces quota that fails closed.
+ * Validates the tenant API key. Fails closed: missing or unknown keys return
+ * 401 without revealing which keys exist.
  */
-export async function authenticateAndCheckQuota(apiKeyHeader: string | null): Promise<AuthResult> {
+export async function authenticateTenant(apiKeyHeader: string | null): Promise<AuthResult> {
   if (!apiKeyHeader) {
     return {
       authorized: false,
@@ -41,12 +41,32 @@ export async function authenticateAndCheckQuota(apiKeyHeader: string | null): Pr
     };
   }
 
-  // Enforce quota: Fail-closed verification
-  if (tenant.usedRequests >= tenant.quotaRequests) {
-    // Record rejected request in metering table
+  return {
+    authorized: true,
+    tenant,
+  };
+}
+
+export type QuotaReservation = { reserved: true; tenant: Tenant } | { reserved: false };
+
+/**
+ * Atomically consumes one quota unit, only if the tenant still has headroom.
+ * The check-and-increment happen in a single SQL UPDATE so concurrent requests
+ * cannot collectively exceed the tenant's quota.
+ *
+ * On exhaustion a rejected request is recorded in the metering table for audit.
+ */
+export async function reserveQuota(tenantId: string): Promise<QuotaReservation> {
+  const updated = await prisma.$executeRaw`
+    UPDATE "Tenant"
+    SET "usedRequests" = "usedRequests" + 1
+    WHERE "id" = ${tenantId} AND "usedRequests" < "quotaRequests"
+  `;
+
+  if (updated === 0) {
     await prisma.request.create({
       data: {
-        tenantId: tenant.id,
+        tenantId,
         endpoint: "/api/chat",
         model: "none",
         promptTokens: 0,
@@ -60,29 +80,9 @@ export async function authenticateAndCheckQuota(apiKeyHeader: string | null): Pr
       },
     });
 
-    return {
-      authorized: false,
-      statusCode: 429,
-      error: `Quota Exceeded: Tenant '${tenant.name}' has exhausted its quota (${tenant.usedRequests}/${tenant.quotaRequests} requests used). Request rejected.`,
-      tenant,
-    };
+    return { reserved: false };
   }
 
-  return {
-    authorized: true,
-    tenant,
-  };
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  return { reserved: true, tenant };
 }
-
-/**
- * Atomically increments the tenant's consumed request counter.
- * Call this only after the request has passed validation, so malformed
- * requests (HTTP 400) do not silently consume quota.
- */
-export async function consumeQuota(tenantId: string): Promise<Tenant> {
-  return prisma.tenant.update({
-    where: { id: tenantId },
-    data: { usedRequests: { increment: 1 } },
-  });
-}
-
