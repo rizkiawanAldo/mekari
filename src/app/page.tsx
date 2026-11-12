@@ -180,12 +180,17 @@ export default function Home() {
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({ error: "Unknown error" }));
         const errMsg = errJson.error || `Error ${res.status}: ${res.statusText}`;
+        // Surface the server-side diagnostic (e.g. Prisma/Turso failure) so
+        // production issues are debuggable without opening DevTools.
+        const errDetails = typeof errJson.details === "string" ? errJson.details : null;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === botMsgId
               ? {
                 ...m,
-                content: `⚠️ [Gateway Error] ${errMsg}`,
+                content: errDetails
+                  ? `⚠️ [Gateway Error] ${errMsg}\n\n${errDetails}`
+                  : `⚠️ [Gateway Error] ${errMsg}`,
                 meta: {
                   model: "gateway-error",
                   latencyMs: 5,
@@ -332,8 +337,8 @@ export default function Home() {
           <button
             onClick={() => setSimulateFailure((prev) => !prev)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${simulateFailure
-                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
+              ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+              : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
               }`}
             title="Forces Primary Backend (Groq/Llama) to fail, proving the Secondary Fallback circuit in real time"
           >
@@ -412,8 +417,8 @@ export default function Home() {
                 >
                   <div
                     className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${m.role === "user"
-                        ? "bg-slate-700 text-slate-200"
-                        : "bg-indigo-600/90 text-white shadow-sm"
+                      ? "bg-slate-700 text-slate-200"
+                      : "bg-indigo-600/90 text-white shadow-sm"
                       }`}
                   >
                     {m.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
@@ -422,8 +427,8 @@ export default function Home() {
                   <div className={`space-y-1.5 ${m.role === "user" ? "items-end text-right" : ""}`}>
                     <div
                       className={`p-3.5 rounded-2xl text-sm leading-relaxed ${m.role === "user"
-                          ? "bg-indigo-600 text-white rounded-br-none"
-                          : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none shadow-sm"
+                        ? "bg-indigo-600 text-white rounded-br-none"
+                        : "bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-none shadow-sm"
                         }`}
                     >
                       {m.content ? (
@@ -534,12 +539,12 @@ export default function Home() {
                     <span className="text-slate-400 font-medium">Outcome:</span>
                     <span
                       className={`font-semibold px-2 py-0.5 rounded ${activeMeta.outcome === "fallback_success"
-                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                          : activeMeta.outcome === "refused"
-                            ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                            : activeMeta.outcome === "quota_exceeded"
-                              ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                        : activeMeta.outcome === "refused"
+                          ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                          : activeMeta.outcome === "quota_exceeded"
+                            ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                         }`}
                     >
                       {activeMeta.outcome}
@@ -882,12 +887,12 @@ export default function Home() {
                       <td className="px-5 py-3">
                         <span
                           className={`font-semibold px-2 py-0.5 rounded text-[10px] ${log.outcome === "fallback_success"
-                              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                              : log.outcome === "quota_exceeded"
-                                ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                                : log.outcome === "refused"
-                                  ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                                  : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                            : log.outcome === "quota_exceeded"
+                              ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                              : log.outcome === "refused"
+                                ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                             }`}
                         >
                           {log.outcome}
