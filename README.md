@@ -4,14 +4,24 @@ An intelligent, multi-tenant LLM gateway and customer support assistant engineer
 
 Built for the **Mekari AI Builder Technical Assessment**.
 
+### 📚 Documents
+
+| Document | What it covers |
+|---|---|
+| [`SUBMISSION.md`](./SUBMISSION.md) | Deliverable index: repo, deployed URL, video, what was built |
+| [`REVIEWER_GUIDE.md`](./REVIEWER_GUIDE.md) | Rubric claim → source file → 30-second demo |
+| [`DEMO_SCRIPT.md`](./DEMO_SCRIPT.md) | Shot-by-shot script for the 3-minute video demo |
+| [`TECHNICAL_REPORT.md`](./TECHNICAL_REPORT.md) | Routing rules, model and retrieval choices, evaluation, trade-offs, what was cut |
+| [`EVAL_REPORT.md`](./EVAL_REPORT.md) | Generated benchmark output (30 held-out cases, 3 configs) |
+
 ---
 
 ## 🚀 Live Demo & Quick Start
 
-- **Framework**: Next.js 15 (App Router, React 19, TypeScript, Tailwind CSS)
+- **Framework**: Next.js 16.4.6 (App Router, React 19, TypeScript, Tailwind CSS)
 - **Database**: Prisma ORM with SQLite (compatible with Turso / libSQL for edge deployment)
 - **RAG Engine**: In-memory BM25 with Stop-Word Filtering (`MiniSearch`) over the Bitext Customer Support Dataset
-- **Supported Backends**: Groq Cloud (Llama 3.1 8B Instant), Google Gemini 1.5 Flash, and Configurable Mock Backend
+- **Supported Backends**: Groq Cloud (Llama 3.1 8B Instant), Google Gemini 1.5 Flash, DeepSeek Chat, and a deterministic Mock Engine
 
 ### Running Locally
 
@@ -22,18 +32,29 @@ cd mekari-router
 # 2. Install dependencies
 npm install
 
-# 3. Seed test tenants and quotas
-npx tsx scripts/seed.ts
+# 3. Seed test tenants and quotas (local SQLite by default)
+npm run db:seed
 
 # 4. (Optional) Configure environment variables in .env
 # GROQ_API_KEY=your_groq_key
 # GEMINI_API_KEY=your_gemini_key
+# DEEPSEEK_API_KEY=your_deepseek_key
+# Note: if TURSO_DATABASE_URL is set, the app talks to Turso instead of prisma/dev.db.
 
 # 5. Start development server
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to access the **Chat Playground** and **Tenant Usage Dashboard**.
+
+### Reviewer quick check
+
+```bash
+npm run check   # TypeScript + ESLint
+npm run eval    # 30-case held-out benchmark (regenerates EVAL_REPORT.md)
+```
+
+See [`REVIEWER_GUIDE.md`](./REVIEWER_GUIDE.md) for a claim-by-claim map from rubric requirement → source file → live demo step.
 
 ---
 
@@ -50,7 +71,7 @@ turso db show mekari-router --url
 turso db tokens create mekari-router
 
 # 3. Create the schema (Prisma Migrate does not target Turso directly)
-turso db shell mekari-router < prisma/migrations/20261112000000_init/migration.sql
+npx tsx scripts/migrate-turso.ts
 
 # 4. Seed the four demo tenants into Turso
 set TURSO_DATABASE_URL=libsql://<db>-<org>.turso.io
@@ -88,14 +109,14 @@ The SQLite database comes pre-seeded with 4 test tenants:
 Run the automated evaluation benchmark anytime:
 
 ```bash
-npx tsx scripts/eval.ts
+npm run eval
 ```
 
 ### Benchmark Results Summary
 
 Evaluated across **30 disjoint held-out cases** across all 27 Bitext customer support intents:
 
-| Metric | Config A: Primary Llama Tier (Fast / Cost) | Config B: Router with Automatic Fallback (Gemini Tier) |
+| Metric | Config A: Fast tier (llama-3.1, ~160 ms) | Config B: Fallback tier (gemini-1.5-flash, ~380 ms) |
 |---|---|---|
 | **Intent Accuracy** | **96.7%** (29/30 correct) | **96.7%** (29/30 correct) |
 | **Answer Quality (F1/ROUGE)** | **0.583** | **0.594** |
@@ -103,6 +124,9 @@ Evaluated across **30 disjoint held-out cases** across all 27 Bitext customer su
 | **Mean Latency** | **162 ms** | **381 ms** |
 | **Total Cost (30 runs)** | **$0.001550** | **$0.003576** |
 | **Success Rate** | **100%** | **100%** |
+| **Fallback Fired** | 0/30 (routes directly) | 0/30 (routes directly) |
+
+**Config C — forced failover:** primary forced to fail on every request → **30/30 served by the fallback, 100% success, P50 381 ms, $0.003576**. That is the number that shows the fallback path works, not just that a second model answers.
 
 *(Detailed breakdown available in [`EVAL_REPORT.md`](./EVAL_REPORT.md))*
 
@@ -118,7 +142,7 @@ Client (Console Playground / API Consumer)
 ┌──────────────────────────────────────────────┐
 │                  GATEWAY                     │
 │  - Per-tenant API key authentication         │
-│  - Atomic fail-closed quota check (429)      │
+│  - Fail-closed per-tenant quota check (429)   │
 │  - SSE text streaming + final meta telemetry  │
 └──────────────────────┬───────────────────────┘
                        │
